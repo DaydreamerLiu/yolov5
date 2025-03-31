@@ -149,41 +149,41 @@ def run(
         ```
     """
     source = str(source)
-    save_img = not nosave and not source.endswith(".txt")  # save inference images
-    is_file = Path(source).suffix[1:] in (IMG_FORMATS + VID_FORMATS)
-    is_url = source.lower().startswith(("rtsp://", "rtmp://", "http://", "https://"))
-    webcam = source.isnumeric() or source.endswith(".streams") or (is_url and not is_file)
-    screenshot = source.lower().startswith("screen")
+    save_img = not nosave and not source.endswith(".txt")  # save inference images 判断是否需要保存推理结果图像。如果 nosave 为 False 且 source 不是 .txt 文件，则设置为 True。
+    is_file = Path(source).suffix[1:] in (IMG_FORMATS + VID_FORMATS) # 检查 source 是否为支持的图像或视频文件格式。
+    is_url = source.lower().startswith(("rtsp://", "rtmp://", "http://", "https://")) # 检查 source 是否为网络流地址（RTSP、RTMP、HTTP 或 HTTPS）。
+    webcam = source.isnumeric() or source.endswith(".streams") or (is_url and not is_file) # 判断输入源是否为摄像头设备（如 0 表示默认摄像头）、.streams 文件或网络流。
+    screenshot = source.lower().startswith("screen") # 检查 source 是否为屏幕截图模式（以 screen 开头）。
     if is_url and is_file:
-        source = check_file(source)  # download
+        source = check_file(source)  # download 如果 source 是一个网络文件路径，则调用 check_file 下载文件并更新 source。
 
     # Directories
-    save_dir = increment_path(Path(project) / name, exist_ok=exist_ok)  # increment run
-    (save_dir / "labels" if save_txt else save_dir).mkdir(parents=True, exist_ok=True)  # make dir
+    save_dir = increment_path(Path(project) / name, exist_ok=exist_ok)  # increment run  创建保存结果的目录路径。如果目录已存在且 exist_ok 为 False，则自动生成新的子目录（如 exp1, exp2 等）。
+    (save_dir / "labels" if save_txt else save_dir).mkdir(parents=True, exist_ok=True)  # make dir 如果启用了 save_txt，创建 labels 子目录；否则直接创建主目录
 
     # Load model
-    device = select_device(device)
-    model = DetectMultiBackend(weights, device=device, dnn=dnn, data=data, fp16=half)
-    stride, names, pt = model.stride, model.names, model.pt
-    imgsz = check_img_size(imgsz, s=stride)  # check image size
+    device = select_device(device) # 根据用户指定的设备（如 cpu 或 cuda:0）选择运行设备。
+    model = DetectMultiBackend(weights, device=device, dnn=dnn, data=data, fp16=half) #  加载目标检测模型，支持多种后端（如 PyTorch、ONNX、TensorRT 等）。
+    stride, names, pt = model.stride, model.names, model.pt  # 获取模型的步幅、类别名称和是否为 PyTorch 模型的信息。
+    imgsz = check_img_size(imgsz, s=stride)  # check image size 查并调整推理图像大小，确保其符合模型的步幅要求。
 
     # Dataloader
-    bs = 1  # batch_size
+    bs = 1  # batch_size 设置批处理大小，默认为 1。
     if webcam:
         view_img = check_imshow(warn=True)
         dataset = LoadStreams(source, img_size=imgsz, stride=stride, auto=pt, vid_stride=vid_stride)
-        bs = len(dataset)
+        bs = len(dataset) # 如果输入源为摄像头或视频流，初始化 LoadStreams 数据加载器，并根据摄像头数量更新批处理大小。
     elif screenshot:
-        dataset = LoadScreenshots(source, img_size=imgsz, stride=stride, auto=pt)
+        dataset = LoadScreenshots(source, img_size=imgsz, stride=stride, auto=pt) # 如果输入源为屏幕截图，初始化 LoadScreenshots 数据加载器。
     else:
-        dataset = LoadImages(source, img_size=imgsz, stride=stride, auto=pt, vid_stride=vid_stride)
-    vid_path, vid_writer = [None] * bs, [None] * bs
+        dataset = LoadImages(source, img_size=imgsz, stride=stride, auto=pt, vid_stride=vid_stride) # 如果输入源为普通图像或视频文件，初始化 LoadImages 数据加载器。
+    vid_path, vid_writer = [None] * bs, [None] * bs # 初始化视频路径和视频写入器列表，用于保存视频结果。
 
     # Run inference
-    model.warmup(imgsz=(1 if pt or model.triton else bs, 3, *imgsz))  # warmup
-    seen, windows, dt = 0, [], (Profile(device=device), Profile(device=device), Profile(device=device))
-    for path, im, im0s, vid_cap, s in dataset:
-        with dt[0]:
+    model.warmup(imgsz=(1 if pt or model.triton else bs, 3, *imgsz)) # 执行模型预热，提升推理性能。
+    seen, windows, dt = 0, [], (Profile(device=device), Profile(device=device), Profile(device=device))  # warmup 初始化计数器、窗口列表和性能分析器。
+    for path, im, im0s, vid_cap, s in dataset:  # 遍历数据加载器中的每一帧图像。
+        with dt[0]:  # 将图像转换为张量，归一化到 [0, 1] 范围，并扩展维度以适配批处理。
             im = torch.from_numpy(im).to(model.device)
             im = im.half() if model.fp16 else im.float()  # uint8 to fp16/32
             im /= 255  # 0 - 255 to 0.0 - 1.0
@@ -193,7 +193,7 @@ def run(
                 ims = torch.chunk(im, im.shape[0], 0)
 
         # Inference
-        with dt[1]:
+        with dt[1]:  # 执行模型推理，获取预测结果。
             visualize = increment_path(save_dir / Path(path).stem, mkdir=True) if visualize else False
             if model.xml and im.shape[0] > 1:
                 pred = None
@@ -206,7 +206,7 @@ def run(
             else:
                 pred = model(im, augment=augment, visualize=visualize)
         # NMS
-        with dt[2]:
+        with dt[2]: # 对预测结果执行非极大值抑制（NMS），过滤掉冗余的检测框。
             pred = non_max_suppression(pred, conf_thres, iou_thres, classes, agnostic_nms, max_det=max_det)
 
         # Second-stage classifier (optional)
@@ -215,7 +215,7 @@ def run(
         # Define the path for the CSV file
         csv_path = save_dir / "predictions.csv"
 
-        # Create or append to the CSV file
+        # Create or append to the CSV file 定义函数 write_to_csv，将预测结果写入 CSV 文件。
         def write_to_csv(image_name, prediction, confidence):
             """Writes prediction data for an image to a CSV file, appending if the file exists."""
             data = {"Image Name": image_name, "Prediction": prediction, "Confidence": confidence}
@@ -225,42 +225,43 @@ def run(
                     writer.writeheader()
                 writer.writerow(data)
 
-        # Process predictions
+        # Process predictions 遍历每张图像的检测结果。
         for i, det in enumerate(pred):  # per image
             seen += 1
             if webcam:  # batch_size >= 1
                 p, im0, frame = path[i], im0s[i].copy(), dataset.count
                 s += f"{i}: "
-            else:
+            else: # 获取当前图像的路径、原始图像和帧编号。
                 p, im0, frame = path, im0s.copy(), getattr(dataset, "frame", 0)
 
             p = Path(p)  # to Path
-            save_path = str(save_dir / p.name)  # im.jpg
-            txt_path = str(save_dir / "labels" / p.stem) + ("" if dataset.mode == "image" else f"_{frame}")  # im.txt
+            save_path = str(save_dir / p.name)  # im.jpg 构造保存结果的图像路径。
+            txt_path = str(save_dir / "labels" / p.stem) + ("" if dataset.mode == "image" else f"_{frame}")  # im.txt 构造保存标签文件的路径。
             s += "{:g}x{:g} ".format(*im.shape[2:])  # print string
             gn = torch.tensor(im0.shape)[[1, 0, 1, 0]]  # normalization gain whwh
             imc = im0.copy() if save_crop else im0  # for save_crop
-            annotator = Annotator(im0, line_width=line_thickness, example=str(names))
+            annotator = Annotator(im0, line_width=line_thickness, example=str(names)) # 初始化标注器，用于在图像上绘制检测框和标签。
             if len(det):
-                # Rescale boxes from img_size to im0 size
+                # Rescale boxes from img_size to im0 size 将检测框从推理尺寸缩放到原始图像尺寸。
                 det[:, :4] = scale_boxes(im.shape[2:], det[:, :4], im0.shape).round()
 
-                # Print results
+                # Print results 统计每个类别的检测数量，并更新日志信息。!!!import
                 for c in det[:, 5].unique():
                     n = (det[:, 5] == c).sum()  # detections per class
                     s += f"{n} {names[int(c)]}{'s' * (n > 1)}, "  # add to string
 
-                # Write results
+                # Write results 遍历每个检测框的坐标、置信度和类别。
                 for *xyxy, conf, cls in reversed(det):
                     c = int(cls)  # integer class
                     label = names[c] if hide_conf else f"{names[c]}"
                     confidence = float(conf)
                     confidence_str = f"{confidence:.2f}"
 
+                    # 如果启用了 save_csv，将检测结果写入 CSV 文件。
                     if save_csv:
                         write_to_csv(p.name, label, confidence_str)
 
-                    if save_txt:  # Write to file
+                    if save_txt:  # Write to file 如果启用了 save_txt，将检测结果保存为文本文件，支持 YOLO 和 Pascal-VOC 格式。
                         if save_format == 0:
                             coords = (
                                 (xyxy2xywh(torch.tensor(xyxy).view(1, 4)) / gn).view(-1).tolist()
@@ -271,16 +272,16 @@ def run(
                         with open(f"{txt_path}.txt", "a") as f:
                             f.write(("%g " * len(line)).rstrip() % line + "\n")
 
-                    if save_img or save_crop or view_img:  # Add bbox to image
+                    if save_img or save_crop or view_img:  # Add bbox to image 在图像上绘制检测框和标签。
                         c = int(cls)  # integer class
                         label = None if hide_labels else (names[c] if hide_conf else f"{names[c]} {conf:.2f}")
                         annotator.box_label(xyxy, label, color=colors(c, True))
-                    if save_crop:
+                    if save_crop:  # 如果启用了 save_crop，保存裁剪后的检测框图像。
                         save_one_box(xyxy, imc, file=save_dir / "crops" / names[c] / f"{p.stem}.jpg", BGR=True)
 
-            # Stream results
+            # Stream results 获取标注后的图像。
             im0 = annotator.result()
-            if view_img:
+            if view_img: # 如果启用了 view_img，显示实时推理结果。
                 if platform.system() == "Linux" and p not in windows:
                     windows.append(p)
                     cv2.namedWindow(str(p), cv2.WINDOW_NORMAL | cv2.WINDOW_KEEPRATIO)  # allow window resize (Linux)
