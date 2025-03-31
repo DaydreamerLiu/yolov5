@@ -1,4 +1,5 @@
-# Ultralytics YOLOv5 🚀, AGPL-3.0 license
+# Ultralytics 🚀 AGPL-3.0 License - https://ultralytics.com/license
+
 # YOLOv5 Continuous Integration (CI) GitHub Actions tests
 
 name: YOLOv5 CI
@@ -141,7 +142,7 @@ jobs:
     if: always()
     steps:
       - name: Check for failure and notify
-        if: (needs.Benchmarks.result == 'failure' || needs.Tests.result == 'failure' || needs.Benchmarks.result == 'cancelled' || needs.Tests.result == 'cancelled') && github.repository == 'ultralytics/yolov5' && (github.event_name == 'schedule' || github.event_name == 'push')
+        if: (needs.Benchmarks.result == 'failure' || needs.Tests.result == 'failure' || needs.Benchmarks.result == 'cancelled' || needs.Tests.result == 'cancelled') && github.repository == 'ultralytics/yolov5' && (github.event_name == 'schedule' || github.event_name == 'push') && github.run_attempt == '1'
         uses: slackapi/slack-github-action@v2.0.0
         with:
           webhook-type: incoming-webhook
