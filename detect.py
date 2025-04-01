@@ -367,7 +367,7 @@ def parse_opt():
     """
     parser = argparse.ArgumentParser()
     parser.add_argument("--weights", nargs="+", type=str, default=ROOT / "runs/train/exp16/weights/best.pt", help="model path or triton URL")
-    parser.add_argument("--source", type=str, default=ROOT / "gooseANDegg/微信图片_20250329180726.jpg", help="file/dir/URL/glob/screen/0(webcam)")
+    parser.add_argument("--source", type=str, default=ROOT / "gooseANDegg/3-31-1.jpg", help="file/dir/URL/glob/screen/0(webcam)")
     parser.add_argument("--data", type=str, default=ROOT / "data/coco128.yaml", help="(optional) dataset.yaml path")
     parser.add_argument("--imgsz", "--img", "--img-size", nargs="+", type=int, default=[640], help="inference size h,w")
     parser.add_argument("--conf-thres", type=float, default=0.25, help="confidence threshold")

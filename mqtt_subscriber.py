@@ -4,7 +4,7 @@ import cv2
 import numpy as np
 import oss2
 from datetime import datetime
-from yolov5.detect import run as detect
+from detect import run as detect
 
 # 巴法云 MQTT 配置
 MQTT_SERVER = "bemfa.com"

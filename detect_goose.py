@@ -33,6 +33,7 @@ import csv
 import os
 import platform
 import sys
+import json
 from pathlib import Path
 
 import torch
@@ -182,6 +183,7 @@ def run(
     # Run inference
     model.warmup(imgsz=(1 if pt or model.triton else bs, 3, *imgsz)) # 执行模型预热，提升推理性能。
     seen, windows, dt = 0, [], (Profile(device=device), Profile(device=device), Profile(device=device))  # warmup 初始化计数器、窗口列表和性能分析器。
+    gNum=[0,0,0] # 初始化分类计数器
     for path, im, im0s, vid_cap, s in dataset:  # 遍历数据加载器中的每一帧图像。
         with dt[0]:  # 将图像转换为张量，归一化到 [0, 1] 范围，并扩展维度以适配批处理。
             im = torch.from_numpy(im).to(model.device)
@@ -248,7 +250,9 @@ def run(
                 # Print results 统计每个类别的检测数量，并更新日志信息。!!!import
                 for c in det[:, 5].unique():
                     n = (det[:, 5] == c).sum()  # detections per class
+                    gNum[int(c)] = f"{n}"
                     s += f"{n} {names[int(c)]}{'s' * (n > 1)}, "  # add to string
+
 
                 # Write results 遍历每个检测框的坐标、置信度和类别。
                 for *xyxy, conf, cls in reversed(det):
@@ -309,16 +313,24 @@ def run(
                     vid_writer[i].write(im0)
 
         # Print time (inference-only)
-        LOGGER.info(f"{s}{'' if len(det) else '(no detections), '}{dt[1].dt * 1E3:.1f}ms")
+        # LOGGER.info(f"{s}{'' if len(det) else '(no detections), '}{dt[1].dt * 1E3:.1f}ms")
 
     # Print results
+
     t = tuple(x.t / seen * 1e3 for x in dt)  # speeds per image
-    LOGGER.info(f"Speed: %.1fms pre-process, %.1fms inference, %.1fms NMS per image at shape {(1, 3, *imgsz)}" % t)
+    # LOGGER.info(f"Speed: %.1fms pre-process, %.1fms inference, %.1fms NMS per image at shape {(1, 3, *imgsz)}" % t)
     if save_txt or save_img:
         s = f"\n{len(list(save_dir.glob('labels/*.txt')))} labels saved to {save_dir / 'labels'}" if save_txt else ""
-        LOGGER.info(f"Results saved to {colorstr('bold', save_dir)}{s}")
+        # LOGGER.info(f"Results saved to {colorstr('bold', save_dir)}{s}")
     if update:
         strip_optimizer(weights[0])  # update model (to fix SourceChangeWarning)
+
+    save_dir_abs = os.path.abspath(save_dir)
+    result_json = json.dumps({
+        'imagePath': save_dir_abs,
+        'counts': gNum
+    })
+    print(result_json)
 
 
 def parse_opt():
@@ -355,6 +367,37 @@ def parse_opt():
         --dnn (bool, optional): Flag to use OpenCV DNN for ONNX inference. Defaults to False.
         --vid-stride (int, optional): Video frame-rate stride, determining the number of frames to skip in between
             consecutive frames. Defaults to 1.
+
+    Args：
+        --weights（str|list[str]，可选）：模型路径或Triton URL。默认为ROOT/“yolov5.pt”。
+        --source（str，可选）：文件/dir/URL/glob/screen/0（网络摄像头）。默认为ROOT/“数据/图像”。
+        --data（str，可选）：数据集YAML路径。提供数据集配置信息。
+        --imgsz（list[int]，可选）：推断大小（高度、宽度）。默认值为[640]。
+        --conf-thres（float，可选）：置信阈值。默认值为0.25。
+        --iou-thres（浮点数，可选）：NMS iou阈值。默认值为0.45。
+        --max-det（int，可选）：每幅图像的最大检测次数。默认值为1000。
+        --设备（str，可选）：CUDA设备，即“0”或“0,1,2,3”或“cpu”。默认为“”。
+        --view-img（bool，可选）：标记以显示结果。默认为False。
+        --save txt（bool，可选）：标记将结果保存到*.txt文件。默认为False。
+        --save csv（bool，可选）：标记以csv格式保存结果。默认为False。
+        --save-conf（bool，可选）：标记以在通过--save-txt保存的标签中保存置信度。默认为False。
+        --保存裁剪（bool，可选）：标记以保存裁剪的预测框。默认为False。
+        --nosave（bool，可选）：用于阻止保存图像/视频的标记。默认为False。
+        --classes（list[int]，可选）：用于过滤结果的类列表，例如“--classes 0 2 3”。默认为“无”。
+        --不可知nms（bool，可选）：表示类不可知nms的标志。默认为False。
+        --auction（bool，可选）：用于增强推理的标志。默认为False。
+        --visualize（bool，可选）：用于可视化特征的标志。默认为False。
+        --update（bool，可选）：标记以更新模型目录中的所有模型。默认为False。
+        --project（str，可选）：保存结果的目录。默认为ROOT/“运行/检测”。
+        --name（str，可选）：用于在--project中保存结果的子目录名。默认为“exp”。
+        --exist-ok（bool，可选）：如果项目/名称已存在，则标记为允许覆盖。默认为False。
+        --线条粗细（int，可选）：边界框的粗细（像素）。默认为3。
+        --隐藏标签（bool，可选）：标记以隐藏输出中的标签。默认为False。
+        --hide-conf（bool，可选）：用于在输出中隐藏机密信息的标记。默认为False。
+        --half（bool，可选）：标记使用FP16半精度推理。默认为False。
+        --dnn（bool，可选）：标记为使用OpenCV dnn进行ONNX推理。默认为False。
+        --vid步幅（int，可选）：视频帧速率步幅，确定其间要跳过的帧数
+        连续帧。默认为1。
 
     Returns:
         argparse.Namespace: Parsed command-line arguments as an argparse.Namespace object.
